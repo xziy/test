@@ -27,3 +27,7 @@ Accepts JSON body with violation data and responds with a simulated success mess
 Accepts an array of transport events and returns a success message.
 
 This server is intended only for local testing and does not persist data between runs.
+
+When using GitHub Actions, ensure that `package-lock.json` is committed. The
+workflow relies on `npm ci`, which requires this lock file to install
+dependencies.
