@@ -27,7 +27,6 @@ Accepts JSON body with violation data and responds with a simulated success mess
 Accepts an array of transport events and returns a success message.
 
 This server is intended only for local testing and does not persist data between runs.
-
 ## Docker
 
 You can build a Docker image that runs the mock server:
@@ -38,3 +37,4 @@ docker run -p 3000:3000 mock-kaat-server
 ```
 
 The container exposes port `3000` by default.
+=======
