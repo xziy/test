@@ -37,4 +37,6 @@ docker run -p 3000:3000 mock-kaat-server
 ```
 
 The container exposes port `3000` by default.
-=======
+When using GitHub Actions, ensure that `package-lock.json` is committed. The
+workflow relies on `npm ci`, which requires this lock file to install
+dependencies.
