@@ -12,6 +12,9 @@ npm start
 
 The server will start on port `3000` by default. You can override the port via the `PORT` environment variable.
 
+All endpoints log their activity to the console so you can see incoming requests
+and any validation errors.
+
 ## Endpoints
 
 ### `POST /auth`
