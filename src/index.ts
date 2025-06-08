@@ -32,13 +32,13 @@ const MAX_SIZE = {
 
 const fileFilter = (req: Request, file: Express.Multer.File, cb: FileFilterCallback) => {
   if (file.fieldname === 'video' && file.mimetype !== 'video/mp4') {
-    return cb(new Error('Video must be MP4'), false);
+    return cb(new Error('Video must be MP4'));
   }
   if (
     (file.fieldname === 'car_photo' || file.fieldname === 'full_photo') &&
     !['image/jpeg', 'image/jpg'].includes(file.mimetype)
   ) {
-    return cb(new Error('Photos must be JPEG'), false);
+    return cb(new Error('Photos must be JPEG'));
   }
   cb(null, true);
 };
@@ -71,14 +71,15 @@ function plinkAuth(req: Request, res: Response, next: NextFunction) {
   next();
 }
 
-// KAAT: token provided in .env as KAAT_TOKEN
+// KAAT: token provided in .env as KAAT_TOKEN; falls back to issuedToken when not set
 function kaatAuth(req: Request, res: Response, next: NextFunction) {
   const auth = req.header('Authorization');
   if (!auth?.startsWith('Bearer ')) {
     return res.status(401).json({ status: 'ERROR', message: 'KAAT: Unauthorized' });
   }
   const token = auth.slice('Bearer '.length);
-  if (token !== KAAT_TOKEN) {
+  const expected = KAAT_TOKEN || issuedToken;
+  if (token !== expected) {
     return res.status(401).json({ status: 'ERROR', message: 'KAAT: Invalid token' });
   }
   next();
@@ -156,7 +157,7 @@ app.post(
       // ...other fields as needed
     } = req.body;
 
-    if (!pID || !pDeviceNumber || pViolation == null || !pLink) {
+    if (!pID) {
       return res.status(400).json({ status: 'ERROR', message: 'Missing required fields' });
     }
 
