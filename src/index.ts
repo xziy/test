@@ -95,6 +95,7 @@ app.post('/auth', (req: Request, res: Response) => {
     return res.status(400).json({ status: 'error', message: 'Missing credentials' });
   }
   issuedToken = Math.random().toString(36).substring(2);
+  console.log(`Authenticated user ${username}, issued token ${issuedToken}`);
   res.json({ token: issuedToken });
 });
 
@@ -171,8 +172,10 @@ app.post(
 app.post('/car-search/v1/device-event/input-all', kaatAuth, (req: Request, res: Response) => {
   const events = req.body;
   if (!Array.isArray(events)) {
+    console.log('Input-all failed: body is not array');
     return res.status(400).json({ status: 'error', message: 'Expected array' });
   }
+  console.log(`Inputting ${events.length} events`);
   res.json({ status: 'success', message: 'Data saved' });
 });
 
