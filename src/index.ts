@@ -150,6 +150,7 @@ app.post(
       pID,
       pDeviceNumber,
       pViolation,
+      pActualSpeed,
       pLink,
       pPhoto,
       pPhotoPlate
@@ -158,6 +159,35 @@ app.post(
 
     if (!pID || !pDeviceNumber || pViolation == null || !pLink) {
       return res.status(400).json({ status: 'ERROR', message: 'Missing required fields' });
+    }
+
+    const speed = Math.abs(Number(pActualSpeed));
+
+    if (Number.isNaN(speed)) {
+      console.log('Event rejected: invalid speed');
+      return res.status(400).json({ status: 'REJECT', message: 'Invalid speed' });
+    }
+
+    let expectedViolation: number | null = null;
+
+    if (speed <= 65) {
+      console.log(`Event rejected: speed ${speed} below violation threshold`);
+      return res.status(400).json({ status: 'REJECT', message: 'No violation detected' });
+    } else if (speed <= 85) {
+      expectedViolation = 36;
+    } else if (speed <= 105) {
+      expectedViolation = 37;
+    } else if (speed <= 125) {
+      expectedViolation = 201;
+    } else {
+      expectedViolation = 202;
+    }
+
+    if (expectedViolation !== Number(pViolation)) {
+      console.log(
+        `Event rejected: speed ${speed} requires violation ${expectedViolation}, received ${pViolation}`
+      );
+      return res.status(400).json({ status: 'REJECT', message: 'Violation code does not match speed' });
     }
 
     res.json({

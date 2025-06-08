@@ -44,12 +44,43 @@ describe('Mock KAAT server', () => {
       .send({
         pID: '2000',
         pDeviceNumber: 'D-1',
-        pViolation: 1,
+        pViolation: 202,
+        pActualSpeed: 130,
         pLink: 'https://mock.example/video.mp4'
       });
     expect(res.status).toBe(200);
     expect(res.body.status).toBe('OK');
     expect(res.body.event_id).toBe('2000');
+  });
+
+  it('rejects mismatched violation code', async () => {
+    const res = await request(app)
+      .post('/billing-api/v1/device-event/create')
+      .set('Authorization', `Bearer ${KAAT_TOKEN}`)
+      .send({
+        pID: '3000',
+        pDeviceNumber: 'D-1',
+        pViolation: 36,
+        pActualSpeed: 90,
+        pLink: 'https://mock.example/video.mp4'
+      });
+    expect(res.status).toBe(400);
+    expect(res.body.status).toBe('REJECT');
+  });
+
+  it('rejects when speed below threshold', async () => {
+    const res = await request(app)
+      .post('/billing-api/v1/device-event/create')
+      .set('Authorization', `Bearer ${KAAT_TOKEN}`)
+      .send({
+        pID: '4000',
+        pDeviceNumber: 'D-1',
+        pViolation: 36,
+        pActualSpeed: 60,
+        pLink: 'https://mock.example/video.mp4'
+      });
+    expect(res.status).toBe(400);
+    expect(res.body.status).toBe('REJECT');
   });
 
   it('inputs all cars', async () => {
