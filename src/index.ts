@@ -71,15 +71,14 @@ function plinkAuth(req: Request, res: Response, next: NextFunction) {
   next();
 }
 
-// KAAT: token provided in .env as KAAT_TOKEN; falls back to issuedToken when not set
+// KAAT: token provided in .env as KAAT_TOKEN
 function kaatAuth(req: Request, res: Response, next: NextFunction) {
   const auth = req.header('Authorization');
   if (!auth?.startsWith('Bearer ')) {
     return res.status(401).json({ status: 'ERROR', message: 'KAAT: Unauthorized' });
   }
   const token = auth.slice('Bearer '.length);
-  const expected = KAAT_TOKEN || issuedToken;
-  if (token !== expected) {
+  if (token !== KAAT_TOKEN) {
     return res.status(401).json({ status: 'ERROR', message: 'KAAT: Invalid token' });
   }
   next();
@@ -157,7 +156,7 @@ app.post(
       // ...other fields as needed
     } = req.body;
 
-    if (!pID) {
+    if (!pID || !pDeviceNumber || pViolation == null || !pLink) {
       return res.status(400).json({ status: 'ERROR', message: 'Missing required fields' });
     }
 
