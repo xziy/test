@@ -79,7 +79,7 @@ function kaatAuth(req: Request, res: Response, next: NextFunction) {
   }
   const token = auth.slice('Bearer '.length);
   if (token !== KAAT_TOKEN) {
-    return res.status(401).json({ status: 'ERROR', message: 'KAAT: Invalid token' });
+    return res.status(401).json({ status: 'ERROR', message: 'KAAT: Invalid token', data: {token, KAAT_TOKEN} });
   }
   next();
 }
