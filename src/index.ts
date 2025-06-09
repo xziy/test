@@ -146,41 +146,62 @@ app.post(
   '/billing-api/v1/device-event/create',
   kaatAuth,
   (req: Request, res: Response) => {
-    const {
-      pID,
-      pDeviceNumber,
-      pViolation,
-      pActualSpeed,
-      pLink,
-      pPhoto,
-      pPhotoPlate
-      // ...other fields as needed
-    } = req.body;
+    // Список обязательных полей
+    const requiredFields = [
+      "pID",
+      "pDeviceNumber",
+      "pViolation",
+      "pPlateNumber",
+      "pValidSpeed",
+      "pActualSpeed",
+      "pViolationDate",
+      "pViolationTime",
+      "pRegion",
+      "pDistrict",
+      "pPlace",
+      "pPlaceLatitude",
+      "pPlaceLongitude",
+      "pPhoto",
+      "pPhotoPlate",
+      "pPhotoAdditional",
+      "pLink"
+    ];
 
-    if (!pID || !pDeviceNumber || pViolation == null || !pLink) {
-      return res.status(400).json({ status: 'ERROR', message: 'Missing required fields' , data: {
-      pID,
-      pDeviceNumber,
-      pViolation,
-      pActualSpeed,
-      pLink,
-      pPhoto,
-      pPhotoPlate
-      // ...other fields as needed
-    }});
+    // Определить, каких полей нет
+    const missing = requiredFields.filter((field) => !(field in req.body));
+    if (missing.length > 0) {
+      return res.status(400).json({
+        status: 'ERROR',
+        message: 'Missing required fields',
+        missing
+      });
     }
 
-    const speed = Math.abs(Number(pActualSpeed));
+    // Доп. валидация на null/undefined/пустую строку для важных полей
+    const emptyFields = requiredFields.filter(
+      (field) =>
+        req.body[field] === null ||
+        req.body[field] === undefined ||
+        (typeof req.body[field] === 'string' && req.body[field].trim() === '')
+    );
+    if (emptyFields.length > 0) {
+      return res.status(400).json({
+        status: 'ERROR',
+        message: 'Some required fields are empty',
+        emptyFields
+      });
+    }
 
+    // Далее твоя логика проверки скорости и кода нарушения...
+
+    const speed = Math.abs(Number(req.body.pActualSpeed));
     if (Number.isNaN(speed)) {
-      console.log('Event rejected: invalid speed');
       return res.status(400).json({ status: 'REJECT', message: 'Invalid speed' });
     }
 
     let expectedViolation: number | null = null;
 
     if (speed <= 65) {
-      console.log(`Event rejected: speed ${speed} below violation threshold`);
       return res.status(400).json({ status: 'REJECT', message: 'No violation detected' });
     } else if (speed <= 85) {
       expectedViolation = 36;
@@ -192,17 +213,15 @@ app.post(
       expectedViolation = 202;
     }
 
-    if (expectedViolation !== Number(pViolation)) {
-      console.log(
-        `Event rejected: speed ${speed} requires violation ${expectedViolation}, received ${pViolation}`
-      );
+    if (expectedViolation !== Number(req.body.pViolation)) {
       return res.status(400).json({ status: 'REJECT', message: 'Violation code does not match speed' });
     }
 
+    // Всё прошло!
     res.json({
       status: 'OK',
       message: 'Event saved successfully',
-      event_id: pID
+      event_id: req.body.pID
     });
   }
 );
