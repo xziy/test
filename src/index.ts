@@ -111,7 +111,7 @@ app.post(
   (req: Request, res: Response) => {
     const { id, car_number, the_date, rule_id } = req.body;
     if (!id || !car_number || !the_date || !rule_id) {
-      return res.status(400).json({ status: 'error', message: 'Missing required form fields' });
+      return res.status(400).json({ status: 'error', message: 'Missing required form fields', data: { id, car_number, the_date, rule_id } });
     }
 
     const files = req.files as { [key: string]: Express.Multer.File[] };
@@ -158,7 +158,16 @@ app.post(
     } = req.body;
 
     if (!pID || !pDeviceNumber || pViolation == null || !pLink) {
-      return res.status(400).json({ status: 'ERROR', message: 'Missing required fields' });
+      return res.status(400).json({ status: 'ERROR', message: 'Missing required fields' , data: {
+      pID,
+      pDeviceNumber,
+      pViolation,
+      pActualSpeed,
+      pLink,
+      pPhoto,
+      pPhotoPlate
+      // ...other fields as needed
+    }});
     }
 
     const speed = Math.abs(Number(pActualSpeed));
