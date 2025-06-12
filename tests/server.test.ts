@@ -55,8 +55,9 @@ describe('Mock KAAT server', () => {
       .attach('car_photo', 'tests/fixtures/car.jpg')
       .attach('full_photo', 'tests/fixtures/full.jpg');
     expect(res.status).toBe(200);
-    expect(res.body.status).toBe('success');
-    expect(res.body.url).toContain('https://');
+    expect(res.body.code).toBe(200);
+    expect(res.body.data.guid).toBeDefined();
+    expect(res.body.data.url).toContain('https://');
   });
 
   it('creates a violation event', async () => {

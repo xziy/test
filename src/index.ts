@@ -151,8 +151,9 @@ app.post(
       }
     }
 
-    const url = `https://mock.example/${path.basename(video.path)}`;
-    res.json({ status: 'success', url });
+    const guid = Math.random().toString(36).substring(2, 10);
+    const url = `https://mock.example/${guid}`;
+    res.json({ code: 200, data: { guid, url } });
   }
 );
 
