@@ -104,7 +104,14 @@ app.post('/auth', (req: Request, res: Response) => {
   }
   issuedToken = Math.random().toString(36).substring(2);
   console.log(`Authenticated user ${username}, issued token ${issuedToken}`);
-  res.json({ token: issuedToken });
+  res.json({
+    code: 200,
+    message: 'Successfully logged in!',
+    data: {
+      token: issuedToken,
+      expiresIn: 86400,
+    },
+  });
 });
 
 // 2. PLINK upload (video + photos)
