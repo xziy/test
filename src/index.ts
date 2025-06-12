@@ -9,6 +9,14 @@ dotenv.config(); // load .env
 export const app = express();
 app.use(express.json({ limit: '10mb' }));
 
+// Log JSON payloads for easier debugging
+app.use((req, _res, next) => {
+  if (req.is('application/json') && Object.keys(req.body || {}).length > 0) {
+    console.log(`Payload for ${req.method} ${req.path}:`, req.body);
+  }
+  next();
+});
+
 // In-memory token issued by /auth for PLINK
 let issuedToken = 'test-token';
 
