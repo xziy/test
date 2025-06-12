@@ -37,8 +37,10 @@ describe('Mock KAAT server', () => {
       .post('/auth')
       .send({ username: 'user', password: 'pass' });
     expect(res.status).toBe(200);
-    expect(res.body.token).toBeDefined();
-    token = res.body.token;
+    expect(res.body.code).toBe(200);
+    expect(res.body.data.token).toBeDefined();
+    expect(res.body.data.expiresIn).toBe(86400);
+    token = res.body.data.token;
   });
 
   it('uploads video and photos', async () => {
