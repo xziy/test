@@ -104,27 +104,38 @@ function kaatAuth(req: Request, res: Response, next: NextFunction) {
 // Routes
 // ------------------
 
+// Вспомогательная функция для логирования ответов
+function logResponse(req: Request, res: Response, body: any) {
+  const status = res.statusCode;
+  const msg = body?.message || body?.status || '';
+  console.log(`RESPONSE [${req.method} ${req.path}] status=${status} message="${msg}" body=`, body);
+}
+
 // 1. Login to get PLINK token
 app.post('/auth', (req: Request, res: Response) => {
   const { username, password } = req.body;
   if (!username || !password) {
-    return res.status(400).json({
+    const resp = {
       status: 'error',
       message: 'Missing credentials',
       missing: [!username ? 'username' : undefined, !password ? 'password' : undefined].filter(Boolean),
       received: req.body
-    });
+    };
+    logResponse(req, res, resp);
+    return res.status(400).json(resp);
   }
   issuedToken = Math.random().toString(36).substring(2);
   console.log(`Authenticated user ${username}, issued token ${issuedToken}`);
-  res.json({
+  const resp = {
     code: 200,
     message: 'Successfully logged in!',
     data: {
       token: issuedToken,
       expiresIn: 86400,
     },
-  });
+  };
+  logResponse(req, res, resp);
+  res.json(resp);
 });
 
 // 2. PLINK upload (video + photos)
@@ -145,12 +156,14 @@ app.post(
       !rule_id ? 'rule_id' : undefined
     ].filter(Boolean);
     if (missingFields.length > 0) {
-      return res.status(400).json({
+      const resp = {
         status: 'error',
         message: 'Missing required form fields',
         missing: missingFields,
         received: req.body
-      });
+      };
+      logResponse(req, res, resp);
+      return res.status(400).json(resp);
     }
 
     const files = req.files as { [key: string]: Express.Multer.File[] };
@@ -164,11 +177,13 @@ app.post(
       !fullPhoto ? 'full_photo' : undefined
     ].filter(Boolean);
     if (missingFiles.length > 0) {
-      return res.status(400).json({
+      const resp = {
         status: 'error',
         message: 'Missing files',
         missing: missingFiles
-      });
+      };
+      logResponse(req, res, resp);
+      return res.status(400).json(resp);
     }
 
     // Per-file size validation
@@ -180,19 +195,23 @@ app.post(
     for (const { file, limit, name } of checks) {
       if (file.size > limit) {
         fs.unlinkSync(file.path);
-        return res.status(400).json({
+        const resp = {
           status: 'error',
           message: `${name} exceeds size limit`,
           fileSize: file.size,
           limit,
           field: name
-        });
+        };
+        logResponse(req, res, resp);
+        return res.status(400).json(resp);
       }
     }
 
     const guid = Math.random().toString(36).substring(2, 10);
     const url = `https://mock.example/${guid}`;
-    res.json({ code: 200, data: { guid, url } });
+    const resp = { code: 200, data: { guid, url } };
+    logResponse(req, res, resp);
+    res.json(resp);
   }
 );
 
@@ -225,12 +244,14 @@ app.post(
     // Определить, каких полей нет
     const missing = requiredFields.filter((field) => !(field in req.body));
     if (missing.length > 0) {
-      return res.status(400).json({
+      const resp = {
         status: 'ERROR',
         message: 'Missing required fields',
         missing,
         received: req.body
-      });
+      };
+      logResponse(req, res, resp);
+      return res.status(400).json(resp);
     }
 
     // Доп. валидация на null/undefined/пустую строку для важных полей
@@ -241,33 +262,39 @@ app.post(
         (typeof req.body[field] === 'string' && req.body[field].trim() === '')
     );
     if (emptyFields.length > 0) {
-      return res.status(400).json({
+      const resp = {
         status: 'ERROR',
         message: 'Some required fields are empty',
         emptyFields,
         received: req.body
-      });
+      };
+      logResponse(req, res, resp);
+      return res.status(400).json(resp);
     }
 
     // Далее твоя логика проверки скорости и кода нарушения...
 
     const speed = Math.abs(Number(req.body.pActualSpeed));
     if (Number.isNaN(speed)) {
-      return res.status(400).json({
+      const resp = {
         status: 'REJECT',
         message: 'Invalid speed',
         received: req.body.pActualSpeed
-      });
+      };
+      logResponse(req, res, resp);
+      return res.status(400).json(resp);
     }
 
     let expectedViolation: number | null = null;
 
     if (speed <= 65) {
-      return res.status(400).json({
+      const resp = {
         status: 'REJECT',
         message: 'No violation detected',
         actualSpeed: req.body.pActualSpeed
-      });
+      };
+      logResponse(req, res, resp);
+      return res.status(400).json(resp);
     } else if (speed <= 85) {
       expectedViolation = 36;
     } else if (speed <= 105) {
@@ -279,21 +306,25 @@ app.post(
     }
 
     if (expectedViolation !== Number(req.body.pViolation)) {
-      return res.status(400).json({
+      const resp = {
         status: 'REJECT',
         message: 'Violation code does not match speed',
         actualSpeed: req.body.pActualSpeed,
         expectedViolation,
         receivedViolation: req.body.pViolation
-      });
+      };
+      logResponse(req, res, resp);
+      return res.status(400).json(resp);
     }
 
     // Всё прошло!
-    res.json({
+    const resp = {
       status: 'OK',
       message: 'Event saved successfully',
       event_id: req.body.pID
-    });
+    };
+    logResponse(req, res, resp);
+    res.json(resp);
   }
 );
 
@@ -302,15 +333,19 @@ app.post('/car-search/v1/device-event/input-all', kaatAuth, (req: Request, res: 
   const events = req.body;
   if (!Array.isArray(events)) {
     console.log('Input-all failed: body is not array');
-    return res.status(400).json({
+    const resp = {
       status: 'error',
       message: 'Expected array',
       receivedType: typeof events,
       received: events
-    });
+    };
+    logResponse(req, res, resp);
+    return res.status(400).json(resp);
   }
   console.log(`Inputting ${events.length} events`);
-  res.json({ status: 'success', message: 'Data saved' });
+  const resp = { status: 'success', message: 'Data saved' };
+  logResponse(req, res, resp);
+  res.json(resp);
 });
 
 // ------------------
