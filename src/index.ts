@@ -32,13 +32,21 @@ const MAX_SIZE = {
 
 const fileFilter = (req: Request, file: Express.Multer.File, cb: FileFilterCallback) => {
   if (file.fieldname === 'video' && file.mimetype !== 'video/mp4') {
-    return cb(new Error('Video must be MP4'));
+    return cb(
+      new Error(
+        `Invalid file type for field "${file.fieldname}". Received: "${file.mimetype}". Expected: "video/mp4".`
+      )
+    );
   }
   if (
     (file.fieldname === 'car_photo' || file.fieldname === 'full_photo') &&
     !['image/jpeg', 'image/jpg'].includes(file.mimetype)
   ) {
-    return cb(new Error('Photos must be JPEG'));
+    return cb(
+      new Error(
+        `Invalid file type for field "${file.fieldname}". Received: "${file.mimetype}". Expected: "image/jpeg" or "image/jpg".`
+      )
+    );
   }
   cb(null, true);
 };
@@ -92,7 +100,12 @@ function kaatAuth(req: Request, res: Response, next: NextFunction) {
 app.post('/auth', (req: Request, res: Response) => {
   const { username, password } = req.body;
   if (!username || !password) {
-    return res.status(400).json({ status: 'error', message: 'Missing credentials' });
+    return res.status(400).json({
+      status: 'error',
+      message: 'Missing credentials',
+      missing: [!username ? 'username' : undefined, !password ? 'password' : undefined].filter(Boolean),
+      received: req.body
+    });
   }
   issuedToken = Math.random().toString(36).substring(2);
   console.log(`Authenticated user ${username}, issued token ${issuedToken}`);
@@ -110,8 +123,19 @@ app.post(
   ]),
   (req: Request, res: Response) => {
     const { id, car_number, the_date, rule_id } = req.body;
-    if (!id || !car_number || !the_date || !rule_id) {
-      return res.status(400).json({ status: 'error', message: 'Missing required form fields', data: { id, car_number, the_date, rule_id } });
+    const missingFields = [
+      !id ? 'id' : undefined,
+      !car_number ? 'car_number' : undefined,
+      !the_date ? 'the_date' : undefined,
+      !rule_id ? 'rule_id' : undefined
+    ].filter(Boolean);
+    if (missingFields.length > 0) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Missing required form fields',
+        missing: missingFields,
+        received: req.body
+      });
     }
 
     const files = req.files as { [key: string]: Express.Multer.File[] };
@@ -119,8 +143,17 @@ app.post(
     const carPhoto = files.car_photo?.[0];
     const fullPhoto = files.full_photo?.[0];
 
-    if (!video || !carPhoto || !fullPhoto) {
-      return res.status(400).json({ status: 'error', message: 'Missing files' });
+    const missingFiles = [
+      !video ? 'video' : undefined,
+      !carPhoto ? 'car_photo' : undefined,
+      !fullPhoto ? 'full_photo' : undefined
+    ].filter(Boolean);
+    if (missingFiles.length > 0) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Missing files',
+        missing: missingFiles
+      });
     }
 
     // Per-file size validation
@@ -132,7 +165,13 @@ app.post(
     for (const { file, limit, name } of checks) {
       if (file.size > limit) {
         fs.unlinkSync(file.path);
-        return res.status(400).json({ status: 'error', message: `${name} exceeds size limit` });
+        return res.status(400).json({
+          status: 'error',
+          message: `${name} exceeds size limit`,
+          fileSize: file.size,
+          limit,
+          field: name
+        });
       }
     }
 
@@ -173,7 +212,8 @@ app.post(
       return res.status(400).json({
         status: 'ERROR',
         message: 'Missing required fields',
-        missing
+        missing,
+        received: req.body
       });
     }
 
@@ -188,7 +228,8 @@ app.post(
       return res.status(400).json({
         status: 'ERROR',
         message: 'Some required fields are empty',
-        emptyFields
+        emptyFields,
+        received: req.body
       });
     }
 
@@ -196,13 +237,21 @@ app.post(
 
     const speed = Math.abs(Number(req.body.pActualSpeed));
     if (Number.isNaN(speed)) {
-      return res.status(400).json({ status: 'REJECT', message: 'Invalid speed' });
+      return res.status(400).json({
+        status: 'REJECT',
+        message: 'Invalid speed',
+        received: req.body.pActualSpeed
+      });
     }
 
     let expectedViolation: number | null = null;
 
     if (speed <= 65) {
-      return res.status(400).json({ status: 'REJECT', message: 'No violation detected' });
+      return res.status(400).json({
+        status: 'REJECT',
+        message: 'No violation detected',
+        actualSpeed: req.body.pActualSpeed
+      });
     } else if (speed <= 85) {
       expectedViolation = 36;
     } else if (speed <= 105) {
@@ -214,7 +263,13 @@ app.post(
     }
 
     if (expectedViolation !== Number(req.body.pViolation)) {
-      return res.status(400).json({ status: 'REJECT', message: 'Violation code does not match speed' });
+      return res.status(400).json({
+        status: 'REJECT',
+        message: 'Violation code does not match speed',
+        actualSpeed: req.body.pActualSpeed,
+        expectedViolation,
+        receivedViolation: req.body.pViolation
+      });
     }
 
     // Всё прошло!
@@ -231,7 +286,12 @@ app.post('/car-search/v1/device-event/input-all', kaatAuth, (req: Request, res: 
   const events = req.body;
   if (!Array.isArray(events)) {
     console.log('Input-all failed: body is not array');
-    return res.status(400).json({ status: 'error', message: 'Expected array' });
+    return res.status(400).json({
+      status: 'error',
+      message: 'Expected array',
+      receivedType: typeof events,
+      received: events
+    });
   }
   console.log(`Inputting ${events.length} events`);
   res.json({ status: 'success', message: 'Data saved' });
