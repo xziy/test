@@ -18,10 +18,28 @@ and any validation errors.
 ## Endpoints
 
 ### `POST /auth`
-Returns a bearer token for further requests.
+Authenticates a user and returns JSON:
+
+```
+{
+  "code": 200,
+  "message": "Successfully logged in!",
+  "data": {
+    "token": "<token>",
+    "expiresIn": 86400
+  }
+}
+```
+
+Use the returned token for subsequent requests.
 
 ### `POST /video/upload`
 Requires `Authorization: Bearer <token>` header and accepts `multipart/form-data` with fields `id`, `car_number`, `the_date`, `rule_id`, `video`, `car_photo`, `full_photo`.
+Responds with:
+
+```json
+{ "code": 200, "data": { "guid": "<guid>", "url": "https://mock.example/<guid>" } }
+```
 
 ### `POST /billing-api/v1/device-event/create`
 Accepts JSON body with violation data and responds with a simulated success message.

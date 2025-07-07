@@ -9,6 +9,14 @@ dotenv.config(); // load .env
 export const app = express();
 app.use(express.json({ limit: '10mb' }));
 
+// Log JSON payloads for easier debugging
+app.use((req, _res, next) => {
+  if (req.is('application/json') && Object.keys(req.body || {}).length > 0) {
+    console.log(`Payload for ${req.method} ${req.path}:`, req.body);
+  }
+  next();
+});
+
 // In-memory token issued by /auth for PLINK
 let issuedToken = 'test-token';
 
@@ -109,7 +117,14 @@ app.post('/auth', (req: Request, res: Response) => {
   }
   issuedToken = Math.random().toString(36).substring(2);
   console.log(`Authenticated user ${username}, issued token ${issuedToken}`);
-  res.json({ token: issuedToken });
+  res.json({
+    code: 200,
+    message: 'Successfully logged in!',
+    data: {
+      token: issuedToken,
+      expiresIn: 86400,
+    },
+  });
 });
 
 // 2. PLINK upload (video + photos)
@@ -175,8 +190,9 @@ app.post(
       }
     }
 
-    const url = `https://mock.example/${path.basename(video.path)}`;
-    res.json({ status: 'success', url });
+    const guid = Math.random().toString(36).substring(2, 10);
+    const url = `https://mock.example/${guid}`;
+    res.json({ code: 200, data: { guid, url } });
   }
 );
 

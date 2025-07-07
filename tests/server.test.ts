@@ -6,6 +6,26 @@ let app: Express;
 
 let token: string;
 
+const baseEvent = {
+  pID: 'E-1',
+  pDeviceNumber: 'D-1',
+  pViolation: 202,
+  pPlateNumber: '01D219YA',
+  pValidSpeed: 60,
+  pActualSpeed: 130,
+  pViolationDate: '2023-01-01',
+  pViolationTime: '12:00:00',
+  pRegion: 'Tashkent',
+  pDistrict: 'District',
+  pPlace: 'Test place',
+  pPlaceLatitude: '0',
+  pPlaceLongitude: '0',
+  pPhoto: 'https://mock.example/photo.jpg',
+  pPhotoPlate: 'https://mock.example/photo_plate.jpg',
+  pPhotoAdditional: 'https://mock.example/photo_add.jpg',
+  pLink: 'https://mock.example/video.mp4'
+};
+
 beforeAll(() => {
   process.env.KAAT_TOKEN = KAAT_TOKEN;
   app = require('../src/index').app;
@@ -17,8 +37,10 @@ describe('Mock KAAT server', () => {
       .post('/auth')
       .send({ username: 'user', password: 'pass' });
     expect(res.status).toBe(200);
-    expect(res.body.token).toBeDefined();
-    token = res.body.token;
+    expect(res.body.code).toBe(200);
+    expect(res.body.data.token).toBeDefined();
+    expect(res.body.data.expiresIn).toBe(86400);
+    token = res.body.data.token;
   });
 
   it('uploads video and photos', async () => {
@@ -33,8 +55,9 @@ describe('Mock KAAT server', () => {
       .attach('car_photo', 'tests/fixtures/car.jpg')
       .attach('full_photo', 'tests/fixtures/full.jpg');
     expect(res.status).toBe(200);
-    expect(res.body.status).toBe('success');
-    expect(res.body.url).toContain('https://');
+    expect(res.body.code).toBe(200);
+    expect(res.body.data.guid).toBeDefined();
+    expect(res.body.data.url).toContain('https://');
   });
 
   it('creates a violation event', async () => {
@@ -42,11 +65,10 @@ describe('Mock KAAT server', () => {
       .post('/billing-api/v1/device-event/create')
       .set('Authorization', `Bearer ${KAAT_TOKEN}`)
       .send({
+        ...baseEvent,
         pID: '2000',
-        pDeviceNumber: 'D-1',
         pViolation: 202,
-        pActualSpeed: 130,
-        pLink: 'https://mock.example/video.mp4'
+        pActualSpeed: 130
       });
     expect(res.status).toBe(200);
     expect(res.body.status).toBe('OK');
@@ -58,11 +80,10 @@ describe('Mock KAAT server', () => {
       .post('/billing-api/v1/device-event/create')
       .set('Authorization', `Bearer ${KAAT_TOKEN}`)
       .send({
+        ...baseEvent,
         pID: '3000',
-        pDeviceNumber: 'D-1',
         pViolation: 36,
-        pActualSpeed: 90,
-        pLink: 'https://mock.example/video.mp4'
+        pActualSpeed: 90
       });
     expect(res.status).toBe(400);
     expect(res.body.status).toBe('REJECT');
@@ -73,11 +94,10 @@ describe('Mock KAAT server', () => {
       .post('/billing-api/v1/device-event/create')
       .set('Authorization', `Bearer ${KAAT_TOKEN}`)
       .send({
+        ...baseEvent,
         pID: '4000',
-        pDeviceNumber: 'D-1',
         pViolation: 36,
-        pActualSpeed: 60,
-        pLink: 'https://mock.example/video.mp4'
+        pActualSpeed: 60
       });
     expect(res.status).toBe(400);
     expect(res.body.status).toBe('REJECT');
