@@ -101,6 +101,40 @@ function kaatAuth(req: Request, res: Response, next: NextFunction) {
 }
 
 // ------------------
+// METRICS
+// ------------------
+
+interface Metrics {
+  kaatSuccess: number;
+  searchSuccess: number;
+  errors: Record<string, number>;
+  lastErrorDate: string | null;
+  plinkSuccess: number;
+  plinkErrors: Record<string, number>;
+  plinkLastErrorDate: string | null;
+}
+
+const metrics: Metrics = {
+  kaatSuccess: 0,
+  searchSuccess: 0,
+  errors: {},
+  lastErrorDate: null,
+  plinkSuccess: 0,
+  plinkErrors: {},
+  plinkLastErrorDate: null,
+};
+
+function incError(errorType: string) {
+  metrics.errors[errorType] = (metrics.errors[errorType] || 0) + 1;
+  metrics.lastErrorDate = new Date().toISOString();
+}
+
+function incPlinkError(errorType: string) {
+  metrics.plinkErrors[errorType] = (metrics.plinkErrors[errorType] || 0) + 1;
+  metrics.plinkLastErrorDate = new Date().toISOString();
+}
+
+// ------------------
 // Routes
 // ------------------
 
@@ -162,6 +196,7 @@ app.post(
         missing: missingFields,
         received: req.body
       };
+      incPlinkError('Missing required form fields');
       logResponse(req, res, resp);
       return res.status(400).json(resp);
     }
@@ -182,6 +217,7 @@ app.post(
         message: 'Missing files',
         missing: missingFiles
       };
+      incPlinkError('Missing files');
       logResponse(req, res, resp);
       return res.status(400).json(resp);
     }
@@ -202,6 +238,7 @@ app.post(
           limit,
           field: name
         };
+        incPlinkError(`${name} exceeds size limit`);
         logResponse(req, res, resp);
         return res.status(400).json(resp);
       }
@@ -210,6 +247,7 @@ app.post(
     const guid = Math.random().toString(36).substring(2, 10);
     const url = `https://mock.example/${guid}`;
     const resp = { code: 200, data: { guid, url } };
+    metrics.plinkSuccess++;
     logResponse(req, res, resp);
     res.json(resp);
   }
@@ -250,6 +288,7 @@ app.post(
         missing,
         received: req.body
       };
+      incError('Missing required fields');
       logResponse(req, res, resp);
       return res.status(400).json(resp);
     }
@@ -268,6 +307,7 @@ app.post(
         emptyFields,
         received: req.body
       };
+      incError('Some required fields are empty');
       logResponse(req, res, resp);
       return res.status(400).json(resp);
     }
@@ -281,6 +321,7 @@ app.post(
         message: 'Invalid speed',
         received: req.body.pActualSpeed
       };
+      incError('Invalid speed');
       logResponse(req, res, resp);
       return res.status(400).json(resp);
     }
@@ -293,6 +334,7 @@ app.post(
         message: 'No violation detected',
         actualSpeed: req.body.pActualSpeed
       };
+      incError('No violation detected');
       logResponse(req, res, resp);
       return res.status(400).json(resp);
     } else if (speed <= 85) {
@@ -313,11 +355,13 @@ app.post(
         expectedViolation,
         receivedViolation: req.body.pViolation
       };
+      incError('Violation code does not match speed');
       logResponse(req, res, resp);
       return res.status(400).json(resp);
     }
 
     // Всё прошло!
+    metrics.kaatSuccess++;
     const resp = {
       status: 'OK',
       message: 'Event saved successfully',
@@ -339,13 +383,23 @@ app.post('/car-search/v1/device-event/input-all', kaatAuth, (req: Request, res: 
       receivedType: typeof events,
       received: events
     };
+    incError('Input-all: not array');
     logResponse(req, res, resp);
     return res.status(400).json(resp);
   }
+  metrics.searchSuccess++;
   console.log(`Inputting ${events.length} events`);
   const resp = { status: 'success', message: 'Data saved' };
   logResponse(req, res, resp);
   res.json(resp);
+});
+
+// ------------------
+// METRICS endpoint
+// ------------------
+
+app.get('/metrics', (req: Request, res: Response) => {
+  res.json(metrics);
 });
 
 // ------------------
