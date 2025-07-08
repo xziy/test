@@ -135,6 +135,44 @@ function incPlinkError(errorType: string) {
 }
 
 // ------------------
+// LAST VIOLATIONS
+// ------------------
+
+type ViolationMeta = {
+  pID: any;
+  pPlateNumber: any;
+  pViolation: any;
+  pActualSpeed: any;
+  pViolationDate: any;
+  pViolationTime: any;
+  pRegion: any;
+  pDistrict: any;
+  pPlace: any;
+  pLink: any;
+  createdAt: string;
+};
+
+const lastViolations: ViolationMeta[] = [];
+
+function addViolationMeta(body: any) {
+  const meta: ViolationMeta = {
+    pID: body.pID,
+    pPlateNumber: body.pPlateNumber,
+    pViolation: body.pViolation,
+    pActualSpeed: body.pActualSpeed,
+    pViolationDate: body.pViolationDate,
+    pViolationTime: body.pViolationTime,
+    pRegion: body.pRegion,
+    pDistrict: body.pDistrict,
+    pPlace: body.pPlace,
+    pLink: body.pLink,
+    createdAt: new Date().toISOString(),
+  };
+  lastViolations.unshift(meta);
+  if (lastViolations.length > 10) lastViolations.length = 10;
+}
+
+// ------------------
 // Routes
 // ------------------
 
@@ -362,6 +400,7 @@ app.post(
 
     // Всё прошло!
     metrics.kaatSuccess++;
+    addViolationMeta(req.body);
     const resp = {
       status: 'OK',
       message: 'Event saved successfully',
@@ -415,6 +454,14 @@ app.get('/metrics/reset', (req: Request, res: Response) => {
   metrics.plinkErrors = {};
   metrics.plinkLastErrorDate = null;
   res.json(metrics);
+});
+
+// ------------------
+// LAST endpoint
+// ------------------
+
+app.get('/last', (req: Request, res: Response) => {
+  res.json({ violations: lastViolations });
 });
 
 // ------------------
