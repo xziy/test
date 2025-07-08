@@ -403,6 +403,21 @@ app.get('/metrics', (req: Request, res: Response) => {
 });
 
 // ------------------
+// METRICS RESET endpoint
+// ------------------
+
+app.get('/metrics/reset', (req: Request, res: Response) => {
+  metrics.kaatSuccess = 0;
+  metrics.searchSuccess = 0;
+  metrics.errors = {};
+  metrics.lastErrorDate = null;
+  metrics.plinkSuccess = 0;
+  metrics.plinkErrors = {};
+  metrics.plinkLastErrorDate = null;
+  res.json(metrics);
+});
+
+// ------------------
 // Start server
 // ------------------
 
