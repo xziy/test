@@ -3,7 +3,7 @@ import multer, { FileFilterCallback } from 'multer';
 import path from 'path';
 import fs from 'fs';
 import dotenv from 'dotenv';
-import tar from 'tar';
+const tar = require('tar');
 import os from 'os';
 
 dotenv.config(); // load .env
