@@ -369,7 +369,7 @@ app.post(
     if (speed <= 65) {
       const resp = {
         status: 'REJECT',
-        message: 'No violation detected',
+        message: 'No violation detected speed <= 65',
         actualSpeed: req.body.pActualSpeed
       };
       incError('No violation detected');
