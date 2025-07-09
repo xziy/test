@@ -104,6 +104,9 @@ function kaatAuth(req: Request, res: Response, next: NextFunction) {
 // METRICS
 // ------------------
 
+const processStartTime = Date.now();
+const dockerImageCreatedAt = process.env.DOCKER_IMAGE_CREATED_AT || null;
+
 interface Metrics {
   kaatSuccess: number;
   searchSuccess: number;
@@ -112,9 +115,11 @@ interface Metrics {
   plinkSuccess: number;
   plinkErrors: Record<string, number>;
   plinkLastErrorDate: string | null;
+  uptimeSeconds: number;
+  dockerImageCreatedAt: string | null;
 }
 
-const metrics: Metrics = {
+const metrics: Omit<Metrics, 'uptimeSeconds' | 'dockerImageCreatedAt'> = {
   kaatSuccess: 0,
   searchSuccess: 0,
   errors: {},
@@ -440,7 +445,11 @@ app.post('/car-search/v1/device-event/input-all', kaatAuth, (req: Request, res: 
 // ------------------
 
 app.get('/metrics', (req: Request, res: Response) => {
-  res.json(metrics);
+  res.json({
+    ...metrics,
+    uptimeSeconds: Math.floor((Date.now() - processStartTime) / 1000),
+    dockerImageCreatedAt,
+  });
 });
 
 // ------------------
