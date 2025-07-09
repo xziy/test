@@ -2,5 +2,5 @@ node_modules
 /dist
 .env
 src/uploads
-src/archives/1752047573055-violations.tar
 src/plink_videos/T-1.mp4
+src/archives/*

@@ -174,6 +174,9 @@ type ViolationMeta = {
   pDistrict: any;
   pPlace: any;
   pLink: any;
+  pPhoto?: any;
+  pPhotoPlate?: any;
+  pPhotoAdditional?: any;
   createdAt: string;
 };
 
@@ -191,6 +194,9 @@ function addViolationMeta(body: any) {
     pDistrict: body.pDistrict,
     pPlace: body.pPlace,
     pLink: body.pLink,
+    pPhoto: body.pPhoto,
+    pPhotoPlate: body.pPhotoPlate,
+    pPhotoAdditional: body.pPhotoAdditional,
     createdAt: new Date().toISOString(),
   };
   lastViolations.unshift(meta);
@@ -215,33 +221,22 @@ async function archiveViolations() {
     lastViolations.forEach((violation, idx) => {
       const vDir = path.join(tmpDir, `violation_${idx + 1}`);
       fs.mkdirSync(vDir);
-      // Write each field as a file
-      Object.entries(violation).forEach(([key, value]) => {
-        // Handle base64 fields
-        if (["pPhoto", "pPhotoPlate", "pPhotoAdditional"].includes(key) && typeof value === 'string' && value.match(/^([A-Za-z0-9+/=]+)$/)) {
-          // Try to decode as base64 and save as jpg
+      // Write violation.txt as JSON
+      fs.writeFileSync(path.join(vDir, 'violation.txt'), JSON.stringify(violation, null, 2), 'utf8');
+
+      // Копируем медиафайлы, если они есть
+      // Фото: если violation содержит base64 поля, сохраняем их как jpg
+      ["pPhoto", "pPhotoPlate", "pPhotoAdditional"].forEach(key => {
+        const vAny = violation as any;
+        if (typeof vAny[key] === 'string' && vAny[key].match(/^([A-Za-z0-9+/=]+)$/)) {
           try {
-            const buf = Buffer.from(value, 'base64');
+            const buf = Buffer.from(vAny[key], 'base64');
             fs.writeFileSync(path.join(vDir, `${key}.jpg`), buf);
-          } catch {
-            fs.writeFileSync(path.join(vDir, key), String(value ?? ''));
-          }
-        } else if (key === "pLink" && typeof value === 'string' && value.match(/^([A-Za-z0-9+/=]+)$/)) {
-          // Try to decode as base64 and save as mp4
-          try {
-            const buf = Buffer.from(value, 'base64');
-            fs.writeFileSync(path.join(vDir, `${key}.mp4`), buf);
-          } catch {
-            fs.writeFileSync(path.join(vDir, key), String(value ?? ''));
-          }
-        } else {
-          fs.writeFileSync(path.join(vDir, key), String(value ?? ''));
+          } catch {}
         }
       });
-      // Write key-value text file
-      const txt = Object.entries(violation).map(([k, v]) => `${k}: ${v}`).join('\n');
-      fs.writeFileSync(path.join(vDir, 'violation.txt'), txt);
-
+      // Видео: если pLink — base64, сохраняем как mp4
+      // Также копируем видео из plink_videos, если есть
       const plinkVideoPathForArchive = path.join(__dirname, 'plink_videos', `${violation.pID}.mp4`);
       if (fs.existsSync(plinkVideoPathForArchive)) {
         fs.copyFileSync(plinkVideoPathForArchive, path.join(vDir, 'video.mp4'));

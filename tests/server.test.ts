@@ -66,13 +66,13 @@ describe('Mock KAAT server', () => {
       .set('Authorization', `Bearer ${KAAT_TOKEN}`)
       .send({
         ...baseEvent,
-        pID: '2000',
+        pID: 'T-1', // Совпадает с id из upload
         pViolation: 202,
         pActualSpeed: 130
       });
     expect(res.status).toBe(200);
     expect(res.body.status).toBe('OK');
-    expect(res.body.event_id).toBe('2000');
+    expect(res.body.event_id).toBe('T-1');
   });
 
   it('rejects mismatched violation code', async () => {
