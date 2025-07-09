@@ -365,7 +365,7 @@ app.post(
     }
 
     let expectedViolation: number | null = null;
-    if ([36, 37, 201, 202].includes(Number(req.body.pViolation))) {
+    if ([36, 37, 201, 202].includes(Number(req.body.pViolation)) || Number(req.body.pViolation) >= 65) {
       if (speed <= 65) {
         const resp = {
           status: 'REJECT',
@@ -384,20 +384,21 @@ app.post(
       } else {
         expectedViolation = 202;
       }
+      
+      if (expectedViolation !== Number(req.body.pViolation)) {
+        const resp = {
+          status: 'REJECT',
+          message: 'Violation code does not match speed',
+          actualSpeed: req.body.pActualSpeed,
+          expectedViolation,
+          receivedViolation: req.body.pViolation
+        };
+        incError('Violation code does not match speed');
+        logResponse(req, res, resp);
+        return res.status(400).json(resp);
+      }
     }
 
-    if (expectedViolation !== Number(req.body.pViolation)) {
-      const resp = {
-        status: 'REJECT',
-        message: 'Violation code does not match speed',
-        actualSpeed: req.body.pActualSpeed,
-        expectedViolation,
-        receivedViolation: req.body.pViolation
-      };
-      incError('Violation code does not match speed');
-      logResponse(req, res, resp);
-      return res.status(400).json(resp);
-    }
 
     // Всё прошло!
     metrics.kaatSuccess++;
