@@ -25,6 +25,9 @@ let issuedToken = 'test-token';
 // KAAT token from env
 const KAAT_TOKEN = process.env.KAAT_TOKEN;
 
+// In-memory map for PLINK video files by id
+// Remove plinkVideoById map
+
 // ------------------
 // Multer configuration
 // ------------------
@@ -238,6 +241,11 @@ async function archiveViolations() {
       // Write key-value text file
       const txt = Object.entries(violation).map(([k, v]) => `${k}: ${v}`).join('\n');
       fs.writeFileSync(path.join(vDir, 'violation.txt'), txt);
+
+      const plinkVideoPathForArchive = path.join(__dirname, 'plink_videos', `${violation.pID}.mp4`);
+      if (fs.existsSync(plinkVideoPathForArchive)) {
+        fs.copyFileSync(plinkVideoPathForArchive, path.join(vDir, 'video.mp4'));
+      }
     });
     // Create tar archive
     await tar.c({ gzip: false, file: archivePath, cwd: tmpDir }, fs.readdirSync(tmpDir));
@@ -370,6 +378,17 @@ app.post(
     metrics.plinkSuccess++;
     logResponse(req, res, resp);
     res.json(resp);
+    const plinkVideoDir = path.join(__dirname, 'plink_videos');
+    const plinkVideoPath = path.join(plinkVideoDir, `${id}.mp4`);
+    fs.copyFileSync(video.path, plinkVideoPath);
+    // Clean up old files if more than 20
+    const plinkFiles = fs.readdirSync(plinkVideoDir).filter(f => f.endsWith('.mp4'));
+    if (plinkFiles.length > 20) {
+      const sorted = plinkFiles.sort();
+      for (let i = 0; i < plinkFiles.length - 20; i++) {
+        fs.unlinkSync(path.join(plinkVideoDir, sorted[i]));
+      }
+    }
   }
 );
 
