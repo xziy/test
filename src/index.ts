@@ -218,32 +218,58 @@ async function archiveViolations() {
   const archivePath = path.join(ARCHIVE_DIR, archiveName);
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'violation-'));
   try {
-    lastViolations.forEach((violation, idx) => {
-      const vDir = path.join(tmpDir, `violation_${idx + 1}`);
+    // Для сбора всех файлов в корень архива
+    const filesForArchive: string[] = [];
+    lastViolations.forEach((violation) => {
+      const vDir = path.join(tmpDir, String(violation.pID));
       fs.mkdirSync(vDir);
-      // Write violation.txt as JSON
-      fs.writeFileSync(path.join(vDir, 'violation.txt'), JSON.stringify(violation, null, 2), 'utf8');
-
-      // Копируем медиафайлы, если они есть
-      // Фото: если violation содержит base64 поля, сохраняем их как jpg
-      ["pPhoto", "pPhotoPlate", "pPhotoAdditional"].forEach(key => {
-        const vAny = violation as any;
+      const vAny = violation as any;
+      const photoFields = ["pPhoto", "pPhotoPlate", "pPhotoAdditional"];
+      const violationForTxt: any = { ...violation };
+      photoFields.forEach(key => {
         if (typeof vAny[key] === 'string' && vAny[key].match(/^([A-Za-z0-9+/=]+)$/)) {
           try {
             const buf = Buffer.from(vAny[key], 'base64');
-            fs.writeFileSync(path.join(vDir, `${key}.jpg`), buf);
-          } catch {}
+            const photoFile = path.join(vDir, `${key}.jpg`);
+            fs.writeFileSync(photoFile, buf);
+            violationForTxt[key] = `${key}.jpg`;
+            filesForArchive.push(photoFile);
+          } catch {
+            violationForTxt[key] = null;
+          }
+        } else {
+          violationForTxt[key] = null;
         }
       });
-      // Видео: если pLink — base64, сохраняем как mp4
-      // Также копируем видео из plink_videos, если есть
+      // Видео: только из plink_videos, если есть
       const plinkVideoPathForArchive = path.join(__dirname, 'plink_videos', `${violation.pID}.mp4`);
       if (fs.existsSync(plinkVideoPathForArchive)) {
-        fs.copyFileSync(plinkVideoPathForArchive, path.join(vDir, 'video.mp4'));
+        const videoFile = path.join(vDir, 'video.mp4');
+        fs.copyFileSync(plinkVideoPathForArchive, videoFile);
+        violationForTxt.pLink = 'video.mp4';
+        filesForArchive.push(videoFile);
+      } else {
+        violationForTxt.pLink = violation.pLink;
       }
+      // Write violation.txt as JSON (без base64)
+      const txtFile = path.join(vDir, 'violation.txt');
+      fs.writeFileSync(txtFile, JSON.stringify(violationForTxt, null, 2), 'utf8');
+      filesForArchive.push(txtFile);
     });
-    // Create tar archive
-    await tar.c({ gzip: false, file: archivePath, cwd: tmpDir }, fs.readdirSync(tmpDir));
+    // Собираем все файлы из всех pID-папок в корень tmpDir
+    const flatFiles: string[] = [];
+    lastViolations.forEach((violation) => {
+      const vDir = path.join(tmpDir, String(violation.pID));
+      const files = fs.readdirSync(vDir);
+      files.forEach(f => {
+        const src = path.join(vDir, f);
+        const dest = path.join(tmpDir, `${violation.pID}_${f}`);
+        fs.copyFileSync(src, dest);
+        flatFiles.push(`${violation.pID}_${f}`);
+      });
+    });
+    // Create tar archive (только файлы из корня tmpDir)
+    await tar.c({ gzip: false, file: archivePath, cwd: tmpDir }, flatFiles);
   } finally {
     // Clean up temp dir
     fs.rmSync(tmpDir, { recursive: true, force: true });
@@ -376,6 +402,18 @@ app.post(
     const plinkVideoDir = path.join(__dirname, 'plink_videos');
     const plinkVideoPath = path.join(plinkVideoDir, `${id}.mp4`);
     fs.copyFileSync(video.path, plinkVideoPath);
+    // NEW: Save video to temp folder for archiving
+    try {
+      const osTmp = os.tmpdir();
+      const tmpViolationDir = path.join(osTmp, 'violation-' + id);
+      if (!fs.existsSync(tmpViolationDir)) {
+        fs.mkdirSync(tmpViolationDir);
+      }
+      const tmpVideoPath = path.join(tmpViolationDir, 'video.mp4');
+      fs.copyFileSync(video.path, tmpVideoPath);
+    } catch (e) {
+      console.error('Failed to save video to temp violation folder:', e);
+    }
     // Clean up old files if more than 20
     const plinkFiles = fs.readdirSync(plinkVideoDir).filter(f => f.endsWith('.mp4'));
     if (plinkFiles.length > 20) {
