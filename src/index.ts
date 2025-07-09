@@ -203,60 +203,16 @@ function addViolationMeta(body: any) {
   if (lastViolations.length > 10) lastViolations.length = 10;
 }
 
-async function archiveViolations() {
-  // Remove old archives if more than 10
-  const files = fs.readdirSync(ARCHIVE_DIR).filter(f => f.endsWith('.tar'));
-  if (files.length >= 10) {
-    const sorted = files.sort(); // assuming names are sortable by time
-    for (let i = 0; i <= files.length - 10; i++) {
-      fs.unlinkSync(path.join(ARCHIVE_DIR, sorted[i]));
-    }
-  }
-  // Archive the last 10 violations
-  if (lastViolations.length === 0) return;
-  const archiveName = `${Date.now()}-violations.tar`;
-  const archivePath = path.join(ARCHIVE_DIR, archiveName);
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'violation-'));
-  try {
-    // Для сбора всех файлов в корень архива
-    const flatFiles: string[] = [];
-    lastViolations.forEach((violation) => {
-      const srcDir = path.join(UPLOAD_DIR, String(violation.pID));
-      if (fs.existsSync(srcDir) && fs.statSync(srcDir).isDirectory()) {
-        const files = fs.readdirSync(srcDir);
-        files.forEach(f => {
-          const src = path.join(srcDir, f);
-          const dest = path.join(tmpDir, `${violation.pID}_${f}`);
-          fs.copyFileSync(src, dest);
-          flatFiles.push(`${violation.pID}_${f}`);
-        });
-      }
-      // violation.txt
-      const violationForTxt: any = { ...violation };
-      // Обновить ссылки на файлы
-      violationForTxt.pPhoto = fs.existsSync(path.join(srcDir, 'car_photo.jpg')) ? `${violation.pID}_car_photo.jpg` : null;
-      violationForTxt.pPhotoPlate = fs.existsSync(path.join(srcDir, 'full_photo.jpg')) ? `${violation.pID}_full_photo.jpg` : null;
-      violationForTxt.pPhotoAdditional = null; // если появится - добавить
-      violationForTxt.pLink = fs.existsSync(path.join(srcDir, 'video.mp4')) ? `${violation.pID}_video.mp4` : violation.pLink;
-      const txtFile = path.join(tmpDir, `${violation.pID}_violation.txt`);
-      fs.writeFileSync(txtFile, JSON.stringify(violationForTxt, null, 2), 'utf8');
-      flatFiles.push(`${violation.pID}_violation.txt`);
-    });
-    // Собираем все файлы из всех pID-папок в корень tmpDir
-    // Create tar archive (только файлы из корня tmpDir)
-    await tar.c({ gzip: false, file: archivePath, cwd: tmpDir }, flatFiles);
-  } finally {
-    // Clean up temp dir
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  }
-}
+// Удаляю старые эндпоинты архивов и логику archiveViolations
+// Удаляю:
+// - archiveViolations функцию
+// - addViolationMetaAndArchive функцию
+// - эндпоинты /archive/latest, /archive/download/:filename
+// - из /archive оставляю только список по pID
 
-// Patch addViolationMeta to archive after update
-const origAddViolationMeta = addViolationMeta;
-function addViolationMetaAndArchive(body: any) {
-  origAddViolationMeta(body);
-  archiveViolations();
-}
+// Оставляю только:
+// - /archive (HTML список по pID)
+// - /archive/download/pid/:pid (архив по одному pID)
 
 // ------------------
 // Routes
@@ -516,7 +472,7 @@ app.post(
 
     // Всё прошло!
     metrics.kaatSuccess++;
-    addViolationMetaAndArchive(req.body);
+    addViolationMeta(req.body);
     const resp = {
       status: 'OK',
       message: 'Event saved successfully',
@@ -584,41 +540,16 @@ app.get('/last', (req: Request, res: Response) => {
   res.json({ violations: lastViolations });
 });
 
-// Add download route
-app.get('/archive/latest', (req: Request, res: Response) => {
-  const files = fs.readdirSync(ARCHIVE_DIR).filter(f => f.endsWith('.tar'));
-  if (files.length === 0) {
-    return res.status(404).json({ status: 'error', message: 'No archives found' });
-  }
-  const latest = files.sort().reverse()[0];
-  const filePath = path.join(ARCHIVE_DIR, latest);
-  res.download(filePath, latest);
-});
-
 // Archive listing endpoint (HTML)
 app.get('/archive', (req: Request, res: Response) => {
-  const files = fs.readdirSync(ARCHIVE_DIR).filter(f => f.endsWith('.tar'));
-  const links = files.sort().reverse().map(f => `<li><a href="/archive/download/${encodeURIComponent(f)}">${f}</a></li>`).join('\n');
-
-  // Добавляем список по pID
+  // Только список по pID
   const pids = lastViolations.map(v => v.pID).filter(Boolean);
-  const pidLinks = pids.map(pid => `<li><a href="/archive/download/pid/${encodeURIComponent(pid)}">Архив только для pID=${pid}</a></li>`).join('\n');
-
+  const pidLinks = pids.map(pid => `<li><a href="/archive/download/pid/${encodeURIComponent(pid)}">Архив для pID=${pid}</a></li>`).join('\n');
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  res.send(`<!DOCTYPE html><html><head><title>Archives</title></head><body><h1>Архивы</h1><ul>${links}</ul><h2>Архивы по pID</h2><ul>${pidLinks}</ul></body></html>`);
+  res.send(`<!DOCTYPE html><html><head><title>Архивы по pID</title></head><body><ul>${pidLinks}</ul></body></html>`);
 });
 
 // Archive download endpoint for individual files
-app.get('/archive/download/:filename', (req: Request, res: Response) => {
-  const { filename } = req.params;
-  const filePath = path.join(ARCHIVE_DIR, filename);
-  if (!fs.existsSync(filePath)) {
-    return res.status(404).json({ status: 'error', message: 'File not found' });
-  }
-  res.download(filePath, filename);
-});
-
-// Новый endpoint: архив только для одного pID
 app.get('/archive/download/pid/:pid', async (req: Request, res: Response) => {
   const { pid } = req.params;
   const violation = lastViolations.find(v => String(v.pID) === String(pid));
@@ -650,6 +581,12 @@ app.get('/archive/download/pid/:pid', async (req: Request, res: Response) => {
         if (field === 'car_photo') violationForTxt.pPhoto = `${pid}_${f}`;
         if (field === 'full_photo') violationForTxt.pPhotoPlate = `${pid}_${f}`;
         // Можно добавить другие поля по аналогии
+      }
+    });
+    // Удалить base64-строки (если есть)
+    ['pPhoto', 'pPhotoPlate', 'pPhotoAdditional'].forEach(key => {
+      if (typeof violationForTxt[key] === 'string' && violationForTxt[key].match(/^([A-Za-z0-9+/=]+)$/)) {
+        violationForTxt[key] = null;
       }
     });
     const txtFile = path.join(tmpDir, `${pid}_violation.txt`);
