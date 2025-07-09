@@ -105,7 +105,17 @@ function kaatAuth(req: Request, res: Response, next: NextFunction) {
 // ------------------
 
 const processStartTime = Date.now();
-const dockerImageCreatedAt = process.env.DOCKER_IMAGE_CREATED_AT || null;
+const dockerImageCreatedAt = process.env.DOCKER_IMAGE_CREATED_AT || (() => {
+  try {
+    const filePath = path.join(__dirname, 'docker_image_created_at');
+    if (fs.existsSync(filePath)) {
+      return fs.readFileSync(filePath, 'utf8').trim().split('=')[1] || null;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+})();
 
 interface Metrics {
   kaatSuccess: number;
