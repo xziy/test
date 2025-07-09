@@ -599,8 +599,13 @@ app.get('/archive/latest', (req: Request, res: Response) => {
 app.get('/archive', (req: Request, res: Response) => {
   const files = fs.readdirSync(ARCHIVE_DIR).filter(f => f.endsWith('.tar'));
   const links = files.sort().reverse().map(f => `<li><a href="/archive/download/${encodeURIComponent(f)}">${f}</a></li>`).join('\n');
+
+  // Добавляем список по pID
+  const pids = lastViolations.map(v => v.pID).filter(Boolean);
+  const pidLinks = pids.map(pid => `<li><a href="/archive/download/pid/${encodeURIComponent(pid)}">Архив только для pID=${pid}</a></li>`).join('\n');
+
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  res.send(`<!DOCTYPE html><html><head><title>Archives</title></head><body><h1>Архивы</h1><ul>${links}</ul></body></html>`);
+  res.send(`<!DOCTYPE html><html><head><title>Archives</title></head><body><h1>Архивы</h1><ul>${links}</ul><h2>Архивы по pID</h2><ul>${pidLinks}</ul></body></html>`);
 });
 
 // Archive download endpoint for individual files
@@ -611,6 +616,57 @@ app.get('/archive/download/:filename', (req: Request, res: Response) => {
     return res.status(404).json({ status: 'error', message: 'File not found' });
   }
   res.download(filePath, filename);
+});
+
+// Новый endpoint: архив только для одного pID
+app.get('/archive/download/pid/:pid', async (req: Request, res: Response) => {
+  const { pid } = req.params;
+  const violation = lastViolations.find(v => String(v.pID) === String(pid));
+  if (!violation) {
+    return res.status(404).json({ status: 'error', message: 'Violation not found' });
+  }
+  const srcDir = path.join(UPLOAD_DIR, String(pid));
+  if (!fs.existsSync(srcDir) || !fs.statSync(srcDir).isDirectory()) {
+    return res.status(404).json({ status: 'error', message: 'Files for this pID not found' });
+  }
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), `violation-${pid}-`));
+  try {
+    // Копируем все файлы из uploads/<pid>/ в tmpDir с префиксом pID
+    const files = fs.readdirSync(srcDir);
+    const flatFiles: string[] = [];
+    files.forEach(f => {
+      const src = path.join(srcDir, f);
+      const dest = path.join(tmpDir, `${pid}_${f}`);
+      fs.copyFileSync(src, dest);
+      flatFiles.push(`${pid}_${f}`);
+    });
+    // violation.txt
+    const violationForTxt: any = { ...violation };
+    // Обновить ссылки на файлы
+    files.forEach(f => {
+      if (f.startsWith('plink_')) {
+        const field = f.replace(/^plink_/, '').replace(/\..*$/, '');
+        if (field === 'video') violationForTxt.pLink = `${pid}_${f}`;
+        if (field === 'car_photo') violationForTxt.pPhoto = `${pid}_${f}`;
+        if (field === 'full_photo') violationForTxt.pPhotoPlate = `${pid}_${f}`;
+        // Можно добавить другие поля по аналогии
+      }
+    });
+    const txtFile = path.join(tmpDir, `${pid}_violation.txt`);
+    fs.writeFileSync(txtFile, JSON.stringify(violationForTxt, null, 2), 'utf8');
+    flatFiles.push(`${pid}_violation.txt`);
+    // Создаём архив
+    const archiveName = `${pid}-violation.tar`;
+    const archivePath = path.join(os.tmpdir(), archiveName);
+    await tar.c({ gzip: false, file: archivePath, cwd: tmpDir }, flatFiles);
+    res.download(archivePath, archiveName, err => {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+      if (fs.existsSync(archivePath)) fs.unlinkSync(archivePath);
+    });
+  } catch (e) {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+    return res.status(500).json({ status: 'error', message: 'Failed to create archive', error: String(e) });
+  }
 });
 
 // ------------------
