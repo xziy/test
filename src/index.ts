@@ -3,6 +3,8 @@ import multer, { FileFilterCallback } from 'multer';
 import path from 'path';
 import fs from 'fs';
 import dotenv from 'dotenv';
+import tar from 'tar';
+import os from 'os';
 
 dotenv.config(); // load .env
 
@@ -30,6 +32,11 @@ const KAAT_TOKEN = process.env.KAAT_TOKEN;
 const UPLOAD_DIR = path.join(__dirname, 'uploads');
 if (!fs.existsSync(UPLOAD_DIR)) {
   fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+}
+
+const ARCHIVE_DIR = path.join(__dirname, 'archives');
+if (!fs.existsSync(ARCHIVE_DIR)) {
+  fs.mkdirSync(ARCHIVE_DIR, { recursive: true });
 }
 
 const MAX_SIZE = {
@@ -185,6 +192,66 @@ function addViolationMeta(body: any) {
   };
   lastViolations.unshift(meta);
   if (lastViolations.length > 10) lastViolations.length = 10;
+}
+
+async function archiveViolations() {
+  // Remove old archives if more than 10
+  const files = fs.readdirSync(ARCHIVE_DIR).filter(f => f.endsWith('.tar'));
+  if (files.length >= 10) {
+    const sorted = files.sort(); // assuming names are sortable by time
+    for (let i = 0; i <= files.length - 10; i++) {
+      fs.unlinkSync(path.join(ARCHIVE_DIR, sorted[i]));
+    }
+  }
+  // Archive the last 10 violations
+  if (lastViolations.length === 0) return;
+  const archiveName = `${Date.now()}-violations.tar`;
+  const archivePath = path.join(ARCHIVE_DIR, archiveName);
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'violation-'));
+  try {
+    lastViolations.forEach((violation, idx) => {
+      const vDir = path.join(tmpDir, `violation_${idx + 1}`);
+      fs.mkdirSync(vDir);
+      // Write each field as a file
+      Object.entries(violation).forEach(([key, value]) => {
+        // Handle base64 fields
+        if (["pPhoto", "pPhotoPlate", "pPhotoAdditional"].includes(key) && typeof value === 'string' && value.match(/^([A-Za-z0-9+/=]+)$/)) {
+          // Try to decode as base64 and save as jpg
+          try {
+            const buf = Buffer.from(value, 'base64');
+            fs.writeFileSync(path.join(vDir, `${key}.jpg`), buf);
+          } catch {
+            fs.writeFileSync(path.join(vDir, key), String(value ?? ''));
+          }
+        } else if (key === "pLink" && typeof value === 'string' && value.match(/^([A-Za-z0-9+/=]+)$/)) {
+          // Try to decode as base64 and save as mp4
+          try {
+            const buf = Buffer.from(value, 'base64');
+            fs.writeFileSync(path.join(vDir, `${key}.mp4`), buf);
+          } catch {
+            fs.writeFileSync(path.join(vDir, key), String(value ?? ''));
+          }
+        } else {
+          fs.writeFileSync(path.join(vDir, key), String(value ?? ''));
+        }
+      });
+      // Write key-value text file
+      const txt = Object.entries(violation).map(([k, v]) => `${k}: ${v}`).join('\n');
+      fs.writeFileSync(path.join(vDir, 'violation.txt'), txt);
+    });
+    // Create tar archive
+    await tar.c({ gzip: false, file: archivePath, cwd: tmpDir }, fs.readdirSync(tmpDir));
+  } finally {
+    // Clean up temp dir
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+}
+
+// Patch addViolationMeta to archive after update
+const origAddViolationMeta = addViolationMeta;
+function addViolationMetaAndArchive(body: any) {
+  origAddViolationMeta(body);
+  archiveViolations();
 }
 
 // ------------------
@@ -417,7 +484,7 @@ app.post(
 
     // Всё прошло!
     metrics.kaatSuccess++;
-    addViolationMeta(req.body);
+    addViolationMetaAndArchive(req.body);
     const resp = {
       status: 'OK',
       message: 'Event saved successfully',
@@ -483,6 +550,35 @@ app.get('/metrics/reset', (req: Request, res: Response) => {
 
 app.get('/last', (req: Request, res: Response) => {
   res.json({ violations: lastViolations });
+});
+
+// Add download route
+app.get('/archive/latest', (req: Request, res: Response) => {
+  const files = fs.readdirSync(ARCHIVE_DIR).filter(f => f.endsWith('.tar'));
+  if (files.length === 0) {
+    return res.status(404).json({ status: 'error', message: 'No archives found' });
+  }
+  const latest = files.sort().reverse()[0];
+  const filePath = path.join(ARCHIVE_DIR, latest);
+  res.download(filePath, latest);
+});
+
+// Archive listing endpoint (HTML)
+app.get('/archive', (req: Request, res: Response) => {
+  const files = fs.readdirSync(ARCHIVE_DIR).filter(f => f.endsWith('.tar'));
+  const links = files.sort().reverse().map(f => `<li><a href="/archive/download/${encodeURIComponent(f)}">${f}</a></li>`).join('\n');
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(`<!DOCTYPE html><html><head><title>Archives</title></head><body><h1>Архивы</h1><ul>${links}</ul></body></html>`);
+});
+
+// Archive download endpoint for individual files
+app.get('/archive/download/:filename', (req: Request, res: Response) => {
+  const { filename } = req.params;
+  const filePath = path.join(ARCHIVE_DIR, filename);
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).json({ status: 'error', message: 'File not found' });
+  }
+  res.download(filePath, filename);
 });
 
 // ------------------
