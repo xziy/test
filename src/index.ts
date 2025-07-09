@@ -95,7 +95,7 @@ function kaatAuth(req: Request, res: Response, next: NextFunction) {
   }
   const token = auth.slice('Bearer '.length);
   if (token !== KAAT_TOKEN) {
-    return res.status(401).json({ status: 'ERROR', message: 'KAAT: Invalid token', data: {token, KAAT_TOKEN} });
+    return res.status(401).json({ status: 'ERROR', message: 'KAAT: Invalid token', data: { token, KAAT_TOKEN } });
   }
   next();
 }
@@ -262,9 +262,9 @@ app.post(
 
     // Per-file size validation
     const checks: Array<{ file: Express.Multer.File; limit: number; name: string }> = [
-      { file: video,   limit: MAX_SIZE.video,      name: 'video' },
-      { file: carPhoto, limit: MAX_SIZE.car_photo,  name: 'car_photo' },
-      { file: fullPhoto,limit: MAX_SIZE.full_photo, name: 'full_photo' }
+      { file: video, limit: MAX_SIZE.video, name: 'video' },
+      { file: carPhoto, limit: MAX_SIZE.car_photo, name: 'car_photo' },
+      { file: fullPhoto, limit: MAX_SIZE.full_photo, name: 'full_photo' }
     ];
     for (const { file, limit, name } of checks) {
       if (file.size > limit) {
@@ -365,24 +365,25 @@ app.post(
     }
 
     let expectedViolation: number | null = null;
-
-    if (speed <= 65) {
-      const resp = {
-        status: 'REJECT',
-        message: 'No violation detected speed <= 65',
-        actualSpeed: req.body.pActualSpeed
-      };
-      incError('No violation detected');
-      logResponse(req, res, resp);
-      return res.status(400).json(resp);
-    } else if (speed <= 85) {
-      expectedViolation = 36;
-    } else if (speed <= 105) {
-      expectedViolation = 37;
-    } else if (speed <= 125) {
-      expectedViolation = 201;
-    } else {
-      expectedViolation = 202;
+    if ([36, 37, 201, 202].includes(Number(req.body.pViolation))) {
+      if (speed <= 65) {
+        const resp = {
+          status: 'REJECT',
+          message: 'No violation detected speed <= 65',
+          actualSpeed: req.body.pActualSpeed
+        };
+        incError('No violation detected');
+        logResponse(req, res, resp);
+        return res.status(400).json(resp);
+      } else if (speed <= 85) {
+        expectedViolation = 36;
+      } else if (speed <= 105) {
+        expectedViolation = 37;
+      } else if (speed <= 125) {
+        expectedViolation = 201;
+      } else {
+        expectedViolation = 202;
+      }
     }
 
     if (expectedViolation !== Number(req.body.pViolation)) {
