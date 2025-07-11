@@ -472,6 +472,30 @@ app.post(
 
     // Всё прошло!
     metrics.kaatSuccess++;
+
+    // --- Сохраняем base64-файлы KAAT, если есть ---
+    const kaatFields = ['pPhoto', 'pPhotoPlate', 'pPhotoAdditional'];
+    const pid = req.body.pID;
+    const uploadDirById = path.join(UPLOAD_DIR, String(pid));
+    if (!fs.existsSync(uploadDirById)) {
+      fs.mkdirSync(uploadDirById, { recursive: true });
+    }
+    kaatFields.forEach(field => {
+      const val = req.body[field];
+      if (typeof val === 'string' && val.length > 100 && /^[A-Za-z0-9+/=]+$/.test(val)) {
+        // Определяем расширение
+        let ext = '.jpg';
+        if (val.startsWith('/9j/')) ext = '.jpg';
+        else if (val.startsWith('iVBORw0KGgo')) ext = '.png';
+        const fileName = `kaat_${field}${ext}`;
+        const filePath = path.join(uploadDirById, fileName);
+        // Сохраняем файл
+        fs.writeFileSync(filePath, Buffer.from(val, 'base64'));
+        // Заменяем значение на имя файла
+        req.body[field] = fileName;
+      }
+    });
+
     addViolationMeta(req.body);
     const resp = {
       status: 'OK',
