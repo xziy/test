@@ -566,11 +566,43 @@ app.get('/last', (req: Request, res: Response) => {
 
 // Archive listing endpoint (HTML)
 app.get('/archive', (req: Request, res: Response) => {
-  // Только список по pID
-  const pids = lastViolations.map(v => v.pID).filter(Boolean);
-  const pidLinks = pids.map(pid => `<li><a href="/archive/download/pid/${encodeURIComponent(pid)}">Архив для pID=${pid}</a></li>`).join('\n');
+  // Получаем список папок (UID) в uploads
+  let uids: string[] = [];
+  try {
+    uids = fs.readdirSync(UPLOAD_DIR).filter(f => fs.statSync(path.join(UPLOAD_DIR, f)).isDirectory());
+  } catch (e) {
+    uids = [];
+  }
+  // Для каждой папки определяем дату самого свежего файла
+  const uidInfos = uids.map(uid => {
+    const dir = path.join(UPLOAD_DIR, uid);
+    let latestMtime = 0;
+    try {
+      const files = fs.readdirSync(dir);
+      for (const file of files) {
+        const stat = fs.statSync(path.join(dir, file));
+        if (stat.mtimeMs > latestMtime) latestMtime = stat.mtimeMs;
+      }
+    } catch (e) {}
+    return { uid, mtime: latestMtime };
+  });
+  // Сортируем по дате (сначала новые)
+  uidInfos.sort((a, b) => b.mtime - a.mtime);
+  // Берём только 500
+  const top500 = uidInfos.slice(0, 500);
+  // Форматируем дату
+  function formatDate(ms: number) {
+    if (!ms) return '-';
+    const d = new Date(ms);
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  }
+  // HTML-таблица
+  const rows = top500.map(({ uid, mtime }) =>
+    `<tr><td><a href="/archive/download/pid/${encodeURIComponent(uid)}">${uid}</a></td><td>${formatDate(mtime)}</td></tr>`
+  ).join('\n');
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  res.send(`<!DOCTYPE html><html><head><title>Архивы по pID</title></head><body><ul>${pidLinks}</ul></body></html>`);
+  res.send(`<!DOCTYPE html><html><head><title>Архивы по UID</title></head><body><h2>Последние 500 файлов по UID</h2><table border="1" cellpadding="5"><thead><tr><th>UID</th><th>Дата</th></tr></thead><tbody>${rows}</tbody></table></body></html>`);
 });
 
 // Archive download endpoint for individual files
