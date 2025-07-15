@@ -165,6 +165,7 @@ function incPlinkError(errorType: string) {
 
 type ViolationMeta = {
   pID: any;
+  pDeviceNumber?: any; // <--- добавлено
   pPlateNumber: any;
   pViolation: any;
   pActualSpeed: any;
@@ -185,6 +186,7 @@ const lastViolations: ViolationMeta[] = [];
 function addViolationMeta(body: any) {
   const meta: ViolationMeta = {
     pID: body.pID,
+    pDeviceNumber: body.pDeviceNumber, // <--- добавлено
     pPlateNumber: body.pPlateNumber,
     pViolation: body.pViolation,
     pActualSpeed: body.pActualSpeed,
@@ -584,7 +586,9 @@ app.get('/archive', (req: Request, res: Response) => {
         if (stat.mtimeMs > latestMtime) latestMtime = stat.mtimeMs;
       }
     } catch (e) {}
-    return { uid, mtime: latestMtime };
+    // Найти ViolationMeta по pID
+    const violation = lastViolations.find(v => String(v.pID) === String(uid));
+    return { uid, mtime: latestMtime, device: violation?.pDeviceNumber || '-' };
   });
   // Сортируем по дате (сначала новые)
   uidInfos.sort((a, b) => b.mtime - a.mtime);
@@ -598,11 +602,11 @@ app.get('/archive', (req: Request, res: Response) => {
     return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
   }
   // HTML-таблица
-  const rows = top500.map(({ uid, mtime }) =>
-    `<tr><td><a href="/archive/download/pid/${encodeURIComponent(uid)}">${uid}</a></td><td>${formatDate(mtime)}</td></tr>`
+  const rows = top500.map(({ uid, mtime, device }) =>
+    `<tr><td><a href="/archive/download/pid/${encodeURIComponent(uid)}">${uid}</a></td><td>${formatDate(mtime)}</td><td>${device}</td></tr>`
   ).join('\n');
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  res.send(`<!DOCTYPE html><html><head><title>Архивы по UID</title></head><body><h2>Последние 500 файлов по UID</h2><table border="1" cellpadding="5"><thead><tr><th>UID</th><th>Дата</th></tr></thead><tbody>${rows}</tbody></table></body></html>`);
+  res.send(`<!DOCTYPE html><html><head><title>Архивы по UID</title></head><body><h2>Последние 500 файлов по UID</h2><table border="1" cellpadding="5"><thead><tr><th>UID</th><th>Дата</th><th>Устройство</th></tr></thead><tbody>${rows}</tbody></table></body></html>`);
 });
 
 // Archive download endpoint for individual files
