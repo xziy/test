@@ -32,6 +32,11 @@ const PLINK_AUTH_URL = process.env.PLINK_AUTH_URL;
 const PLINK_UPLOAD_URL = process.env.PLINK_UPLOAD_URL;
 const PROXY_ENABLED = PLINK_AUTH_URL && PLINK_UPLOAD_URL;
 
+// KAAT proxy URLs from env
+const KAAT_CREATE_URL = process.env.KAAT_CREATE_URL;
+const KAAT_INPUT_ALL_URL = process.env.KAAT_INPUT_ALL_URL;
+const KAAT_PROXY_ENABLED = KAAT_CREATE_URL && KAAT_INPUT_ALL_URL;
+
 // In-memory map for PLINK video files by id
 // Remove plinkVideoById map
 
@@ -833,6 +838,110 @@ if (PROXY_ENABLED) {
   });
 } else {
   console.log('PLINK proxy disabled - missing environment variables');
+}
+
+// ------------------
+// KAAT PROXY ROUTES (if enabled)
+// ------------------
+
+if (KAAT_PROXY_ENABLED) {
+  console.log('KAAT proxy enabled:', { KAAT_CREATE_URL, KAAT_INPUT_ALL_URL });
+
+  // Proxy for KAAT device-event/create
+  app.post('/kaat/billing-api/v1/device-event/create', async (req: Request, res: Response) => {
+    try {
+      console.log('=== KAAT CREATE PROXY ===');
+      console.log('Incoming request body:', JSON.stringify(req.body, null, 2));
+      console.log('Incoming headers:', JSON.stringify(req.headers, null, 2));
+      console.log('Proxying create request to:', KAAT_CREATE_URL);
+      
+      const response = await axios.post(KAAT_CREATE_URL!, req.body, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...Object.fromEntries(
+            Object.entries(req.headers).filter(([key]) => 
+              !['host', 'content-length'].includes(key.toLowerCase())
+            )
+          )
+        },
+        timeout: 30000
+      });
+      
+      console.log('Outgoing response status:', response.status);
+      console.log('Outgoing response headers:', JSON.stringify(response.headers, null, 2));
+      console.log('Outgoing response body:', JSON.stringify(response.data, null, 2));
+      console.log('=== END KAAT CREATE PROXY ===');
+      
+      logResponse(req, res, response.data);
+      res.status(response.status).json(response.data);
+    } catch (error: any) {
+      console.error('=== KAAT CREATE PROXY ERROR ===');
+      console.error('Error message:', error.message);
+      console.error('Error response status:', error.response?.status);
+      console.error('Error response data:', JSON.stringify(error.response?.data, null, 2));
+      console.error('=== END KAAT CREATE PROXY ERROR ===');
+      
+      const statusCode = error.response?.status || 500;
+      const errorData = error.response?.data || { 
+        status: 'ERROR', 
+        message: 'Proxy create request failed',
+        error: error.message 
+      };
+      
+      incError('Proxy create failed');
+      logResponse(req, res, errorData);
+      res.status(statusCode).json(errorData);
+    }
+  });
+
+  // Proxy for KAAT car-search input-all
+  app.post('/kaat/car-search/v1/device-event/input-all', async (req: Request, res: Response) => {
+    try {
+      console.log('=== KAAT INPUT-ALL PROXY ===');
+      console.log('Incoming request body:', JSON.stringify(req.body, null, 2));
+      console.log('Incoming headers:', JSON.stringify(req.headers, null, 2));
+      console.log('Proxying input-all request to:', KAAT_INPUT_ALL_URL);
+      
+      const response = await axios.post(KAAT_INPUT_ALL_URL!, req.body, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...Object.fromEntries(
+            Object.entries(req.headers).filter(([key]) => 
+              !['host', 'content-length'].includes(key.toLowerCase())
+            )
+          )
+        },
+        timeout: 30000
+      });
+      
+      console.log('Outgoing response status:', response.status);
+      console.log('Outgoing response headers:', JSON.stringify(response.headers, null, 2));
+      console.log('Outgoing response body:', JSON.stringify(response.data, null, 2));
+      console.log('=== END KAAT INPUT-ALL PROXY ===');
+      
+      logResponse(req, res, response.data);
+      res.status(response.status).json(response.data);
+    } catch (error: any) {
+      console.error('=== KAAT INPUT-ALL PROXY ERROR ===');
+      console.error('Error message:', error.message);
+      console.error('Error response status:', error.response?.status);
+      console.error('Error response data:', JSON.stringify(error.response?.data, null, 2));
+      console.error('=== END KAAT INPUT-ALL PROXY ERROR ===');
+      
+      const statusCode = error.response?.status || 500;
+      const errorData = error.response?.data || { 
+        status: 'error', 
+        message: 'Proxy input-all request failed',
+        error: error.message 
+      };
+      
+      incError('Proxy input-all failed');
+      logResponse(req, res, errorData);
+      res.status(statusCode).json(errorData);
+    }
+  });
+} else {
+  console.log('KAAT proxy disabled - missing environment variables');
 }
 
 // ------------------
