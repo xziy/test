@@ -5,6 +5,8 @@ import fs from 'fs';
 import dotenv from 'dotenv';
 const tar = require('tar');
 import os from 'os';
+import axios from 'axios';
+import FormData from 'form-data';
 
 dotenv.config(); // load .env
 
@@ -24,6 +26,11 @@ let issuedToken = 'test-token';
 
 // KAAT token from env
 const KAAT_TOKEN = process.env.KAAT_TOKEN;
+
+// PLINK proxy URLs from env
+const PLINK_AUTH_URL = process.env.PLINK_AUTH_URL;
+const PLINK_UPLOAD_URL = process.env.PLINK_UPLOAD_URL;
+const PROXY_ENABLED = PLINK_AUTH_URL && PLINK_UPLOAD_URL;
 
 // In-memory map for PLINK video files by id
 // Remove plinkVideoById map
@@ -665,6 +672,108 @@ app.get('/archive/download/pid/:pid', async (req: Request, res: Response) => {
     return res.status(500).json({ status: 'error', message: 'Failed to create archive', error: String(e) });
   }
 });
+
+// ------------------
+// PLINK PROXY ROUTES (if enabled)
+// ------------------
+
+if (PROXY_ENABLED) {
+  console.log('PLINK proxy enabled:', { PLINK_AUTH_URL, PLINK_UPLOAD_URL });
+
+  // Proxy for PLINK auth
+  app.post('/plink/auth', async (req: Request, res: Response) => {
+    try {
+      console.log('Proxying auth request to:', PLINK_AUTH_URL);
+      const response = await axios.post(PLINK_AUTH_URL!, req.body, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...Object.fromEntries(
+            Object.entries(req.headers).filter(([key]) => 
+              !['host', 'content-length'].includes(key.toLowerCase())
+            )
+          )
+        },
+        timeout: 30000
+      });
+      
+      logResponse(req, res, response.data);
+      res.status(response.status).json(response.data);
+    } catch (error: any) {
+      console.error('PLINK auth proxy error:', error.message);
+      const statusCode = error.response?.status || 500;
+      const errorData = error.response?.data || { 
+        status: 'error', 
+        message: 'Proxy request failed',
+        error: error.message 
+      };
+      
+      incPlinkError('Proxy auth failed');
+      logResponse(req, res, errorData);
+      res.status(statusCode).json(errorData);
+    }
+  });
+
+  // Proxy for PLINK video upload
+  app.post('/plink/video/upload', async (req: Request, res: Response) => {
+    try {
+      console.log('Proxying video upload to:', PLINK_UPLOAD_URL);
+      
+      // Create FormData from the incoming request
+      const formData = new FormData();
+      
+      // Add text fields
+      Object.keys(req.body || {}).forEach(key => {
+        if (req.body[key] !== undefined) {
+          formData.append(key, req.body[key]);
+        }
+      });
+      
+      // Add files if they exist
+      if (req.files && typeof req.files === 'object') {
+        Object.entries(req.files as { [key: string]: Express.Multer.File[] }).forEach(([key, files]) => {
+          if (files && files.length > 0) {
+            const file = files[0];
+            formData.append(key, fs.createReadStream(file.path), {
+              filename: file.originalname,
+              contentType: file.mimetype
+            });
+          }
+        });
+      }
+      
+      const response = await axios.post(PLINK_UPLOAD_URL!, formData, {
+        headers: {
+          ...formData.getHeaders(),
+          ...Object.fromEntries(
+            Object.entries(req.headers).filter(([key]) => 
+              !['host', 'content-length', 'content-type'].includes(key.toLowerCase())
+            )
+          )
+        },
+        timeout: 60000, // Longer timeout for file uploads
+        maxContentLength: 50 * 1024 * 1024, // 50MB
+        maxBodyLength: 50 * 1024 * 1024
+      });
+      
+      logResponse(req, res, response.data);
+      res.status(response.status).json(response.data);
+    } catch (error: any) {
+      console.error('PLINK upload proxy error:', error.message);
+      const statusCode = error.response?.status || 500;
+      const errorData = error.response?.data || { 
+        status: 'error', 
+        message: 'Proxy upload failed',
+        error: error.message 
+      };
+      
+      incPlinkError('Proxy upload failed');
+      logResponse(req, res, errorData);
+      res.status(statusCode).json(errorData);
+    }
+  });
+} else {
+  console.log('PLINK proxy disabled - missing environment variables');
+}
 
 // ------------------
 // Start server

@@ -12,6 +12,17 @@ npm start
 
 The server will start on port `3000` by default. You can override the port via the `PORT` environment variable.
 
+### Environment Variables
+
+Create a `.env` file (see `.env.example` for reference):
+
+- `KAAT_TOKEN` - Authentication token for KAAT endpoints
+- `PORT` - Server port (default: 3000)
+- `PLINK_AUTH_URL` - (Optional) Real PLINK auth URL for proxy mode
+- `PLINK_UPLOAD_URL` - (Optional) Real PLINK upload URL for proxy mode
+
+If both `PLINK_AUTH_URL` and `PLINK_UPLOAD_URL` are set, the server will enable proxy endpoints that forward requests to the real PLINK server.
+
 All endpoints log their activity to the console so you can see incoming requests
 and any validation errors.
 
@@ -46,6 +57,21 @@ Accepts JSON body with violation data and responds with a simulated success mess
 
 ### `POST /car-search/v1/device-event/input-all`
 Accepts an array of transport events and returns a success message.
+
+## PLINK Proxy Endpoints (Optional)
+
+When `PLINK_AUTH_URL` and `PLINK_UPLOAD_URL` environment variables are configured, the following proxy endpoints become available:
+
+### `POST /plink/auth`
+Proxies authentication requests to the real PLINK server. Forwards all headers and body content, returning the exact response from the upstream server.
+
+### `POST /plink/video/upload`
+Proxies video upload requests to the real PLINK server. Handles multipart form data including files and forwards everything to the upstream server.
+
+These proxy endpoints are useful for:
+- Testing against real PLINK infrastructure
+- Development environments that need to connect to staging PLINK servers
+- Debugging issues with PLINK integration
 
 This server is intended only for local testing and does not persist data between runs.
 
