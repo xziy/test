@@ -728,7 +728,13 @@ if (PROXY_ENABLED) {
   });
 
   // Proxy for PLINK video upload
-  app.post('/plink/video/upload', async (req: Request, res: Response) => {
+  app.post('/plink/video/upload', 
+    upload.fields([
+      { name: 'video', maxCount: 1 },
+      { name: 'car_photo', maxCount: 1 },
+      { name: 'full_photo', maxCount: 1 }
+    ]),
+    async (req: Request, res: Response) => {
     try {
       console.log('=== PLINK VIDEO UPLOAD PROXY ===');
       console.log('Incoming request body (form fields):', JSON.stringify(req.body, null, 2));
