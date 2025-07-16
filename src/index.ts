@@ -683,7 +683,11 @@ if (PROXY_ENABLED) {
   // Proxy for PLINK auth
   app.post('/plink/auth', async (req: Request, res: Response) => {
     try {
+      console.log('=== PLINK AUTH PROXY ===');
+      console.log('Incoming request body:', JSON.stringify(req.body, null, 2));
+      console.log('Incoming headers:', JSON.stringify(req.headers, null, 2));
       console.log('Proxying auth request to:', PLINK_AUTH_URL);
+      
       const response = await axios.post(PLINK_AUTH_URL!, req.body, {
         headers: {
           'Content-Type': 'application/json',
@@ -696,10 +700,20 @@ if (PROXY_ENABLED) {
         timeout: 30000
       });
       
+      console.log('Outgoing response status:', response.status);
+      console.log('Outgoing response headers:', JSON.stringify(response.headers, null, 2));
+      console.log('Outgoing response body:', JSON.stringify(response.data, null, 2));
+      console.log('=== END PLINK AUTH PROXY ===');
+      
       logResponse(req, res, response.data);
       res.status(response.status).json(response.data);
     } catch (error: any) {
-      console.error('PLINK auth proxy error:', error.message);
+      console.error('=== PLINK AUTH PROXY ERROR ===');
+      console.error('Error message:', error.message);
+      console.error('Error response status:', error.response?.status);
+      console.error('Error response data:', JSON.stringify(error.response?.data, null, 2));
+      console.error('=== END PLINK AUTH PROXY ERROR ===');
+      
       const statusCode = error.response?.status || 500;
       const errorData = error.response?.data || { 
         status: 'error', 
@@ -716,6 +730,23 @@ if (PROXY_ENABLED) {
   // Proxy for PLINK video upload
   app.post('/plink/video/upload', async (req: Request, res: Response) => {
     try {
+      console.log('=== PLINK VIDEO UPLOAD PROXY ===');
+      console.log('Incoming request body (form fields):', JSON.stringify(req.body, null, 2));
+      console.log('Incoming headers:', JSON.stringify(req.headers, null, 2));
+      
+      // Log file information
+      if (req.files && typeof req.files === 'object') {
+        console.log('Incoming files:');
+        Object.entries(req.files as { [key: string]: Express.Multer.File[] }).forEach(([key, files]) => {
+          if (files && files.length > 0) {
+            const file = files[0];
+            console.log(`  ${key}: ${file.originalname} (${file.mimetype}, ${file.size} bytes)`);
+          }
+        });
+      } else {
+        console.log('No files in request');
+      }
+      
       console.log('Proxying video upload to:', PLINK_UPLOAD_URL);
       
       // Create FormData from the incoming request
@@ -725,6 +756,7 @@ if (PROXY_ENABLED) {
       Object.keys(req.body || {}).forEach(key => {
         if (req.body[key] !== undefined) {
           formData.append(key, req.body[key]);
+          console.log(`Added form field: ${key} = ${req.body[key]}`);
         }
       });
       
@@ -737,28 +769,50 @@ if (PROXY_ENABLED) {
               filename: file.originalname,
               contentType: file.mimetype
             });
+            console.log(`Added file: ${key} = ${file.originalname} (${file.mimetype})`);
           }
         });
       }
       
-      const response = await axios.post(PLINK_UPLOAD_URL!, formData, {
-        headers: {
-          ...formData.getHeaders(),
-          ...Object.fromEntries(
-            Object.entries(req.headers).filter(([key]) => 
-              !['host', 'content-length', 'content-type'].includes(key.toLowerCase())
-            )
+      const outgoingHeaders = {
+        ...formData.getHeaders(),
+        ...Object.fromEntries(
+          Object.entries(req.headers).filter(([key]) => 
+            !['host', 'content-length', 'content-type'].includes(key.toLowerCase())
           )
-        },
+        )
+      };
+      
+      console.log('Outgoing headers:', JSON.stringify(outgoingHeaders, null, 2));
+      
+      const response = await axios.post(PLINK_UPLOAD_URL!, formData, {
+        headers: outgoingHeaders,
         timeout: 60000, // Longer timeout for file uploads
         maxContentLength: 50 * 1024 * 1024, // 50MB
         maxBodyLength: 50 * 1024 * 1024
       });
       
+      console.log('Outgoing response status:', response.status);
+      console.log('Outgoing response headers:', JSON.stringify(response.headers, null, 2));
+      console.log('Outgoing response body:', JSON.stringify(response.data, null, 2));
+      console.log('=== END PLINK VIDEO UPLOAD PROXY ===');
+      
       logResponse(req, res, response.data);
       res.status(response.status).json(response.data);
     } catch (error: any) {
-      console.error('PLINK upload proxy error:', error.message);
+      console.error('=== PLINK VIDEO UPLOAD PROXY ERROR ===');
+      console.error('Error message:', error.message);
+      console.error('Error response status:', error.response?.status);
+      console.error('Error response data:', JSON.stringify(error.response?.data, null, 2));
+      if (error.code) {
+        console.error('Error code:', error.code);
+      }
+      if (error.config) {
+        console.error('Request config URL:', error.config.url);
+        console.error('Request config method:', error.config.method);
+      }
+      console.error('=== END PLINK VIDEO UPLOAD PROXY ERROR ===');
+      
       const statusCode = error.response?.status || 500;
       const errorData = error.response?.data || { 
         status: 'error', 
