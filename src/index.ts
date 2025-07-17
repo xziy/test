@@ -434,6 +434,69 @@ app.post(
       return res.status(400).json(resp);
     }
 
+    // Проверка маски для pViolationDate (формат: DD.MM.YYYY)
+    const violationDate = req.body.pViolationDate;
+    const datePattern = /^\d{2}\.\d{2}\.\d{4}$/;
+    if (!datePattern.test(violationDate)) {
+      const resp = {
+        status: 200,
+        message: null,
+        data: 'DATE_WRONG',
+        ok: true,
+        error_code: null
+      };
+      incError('Invalid pViolationDate format');
+      logResponse(req, res, resp);
+      return res.status(200).json(resp);
+    }
+
+    // Проверка маски для pViolationTime (формат: HH:MM:SS)
+    const violationTime = req.body.pViolationTime;
+    const timePattern = /^\d{2}:\d{2}:\d{2}$/;
+    if (!timePattern.test(violationTime)) {
+      const resp = {
+        status: 200,
+        message: null,
+        data: 'TIME_WRONG',
+        ok: true,
+        error_code: null
+      };
+      incError('Invalid pViolationTime format');
+      logResponse(req, res, resp);
+      return res.status(200).json(resp);
+    }
+
+    // Дополнительная проверка валидности даты
+    const [day, month, year] = violationDate.split('.').map(Number);
+    const date = new Date(year, month - 1, day);
+    if (date.getDate() !== day || date.getMonth() !== month - 1 || date.getFullYear() !== year) {
+      const resp = {
+        status: 200,
+        message: null,
+        data: 'DATE_WRONG',
+        ok: true,
+        error_code: null
+      };
+      incError('Invalid date values');
+      logResponse(req, res, resp);
+      return res.status(200).json(resp);
+    }
+
+    // Дополнительная проверка валидности времени
+    const [hours, minutes, seconds] = violationTime.split(':').map(Number);
+    if (hours > 23 || minutes > 59 || seconds > 59) {
+      const resp = {
+        status: 200,
+        message: null,
+        data: 'TIME_WRONG',
+        ok: true,
+        error_code: null
+      };
+      incError('Invalid time values');
+      logResponse(req, res, resp);
+      return res.status(200).json(resp);
+    }
+
     // Далее твоя логика проверки скорости и кода нарушения...
 
     const speed = Math.abs(Number(req.body.pActualSpeed));
